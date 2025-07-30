@@ -1,9 +1,12 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Toaster } from 'react-hot-toast';
+import App from './views';
 
 import '../popup/style.css';
-import Main from './views';
+
+const queryClient = new QueryClient();
 
 export const CreateContentElement = (
   uiContainer: HTMLElement,
@@ -35,14 +38,16 @@ export const CreateContentElement = (
   const root = ReactDOM.createRoot(app);
   root.render(
     <React.StrictMode>
-      <Toaster />
-      {callback(root)}
+      <QueryClientProvider client={queryClient}>
+        <Toaster />
+        {callback(root)}
+      </QueryClientProvider>
     </React.StrictMode>
   );
   return root;
 };
 
-const createUi = async (ctx: any, message: string) => {
+const createUi = async (ctx: any, selectedText: string) => {
   return createShadowRootUi(ctx, {
     name: 'post-element',
     position: 'inline',
@@ -52,7 +57,7 @@ const createUi = async (ctx: any, message: string) => {
           root?.unmount();
           shadowContainer.remove();
         };
-        return <Main onClose={onRemove} />;
+        return <App onClose={onRemove} selectedText={selectedText} />;
       });
     },
     onRemove(root) {
@@ -67,42 +72,33 @@ export default defineContentScript({
   async main(ctx) {
     chrome.runtime.onMessage.addListener(
       async (message, sender, sendResponse) => {
-        const promptUi = await createUi(ctx, 'post');
-        promptUi.mount();
-        // switch (message.action) {
-        //   case 'post':
-        //     const postUi = await createUi(ctx, 'post');
-        //     postUi.mount();
-        //     break;
-        //   case 'comment':
-        //     const commentUi = await createUi(ctx, 'comment');
-        //     commentUi.mount();
-        //     break;
-        //   default:
-        //     break;
+        // if (message.action === 'prompt') {
+        //   console.log('[ContentScript] received prompt message');
+
+        //   sendResponse({ status: 'UI triggered in if condition' });
         // }
+
+        const activeElement = document.activeElement;
+        let selectedText = '';
+
+        if (
+          activeElement instanceof HTMLInputElement ||
+          activeElement instanceof HTMLTextAreaElement
+        ) {
+          selectedText = activeElement.value.substring(
+            activeElement.selectionStart || 0,
+            activeElement.selectionEnd || 0
+          );
+        } else {
+          selectedText = window.getSelection()?.toString() || '';
+        }
+
+        sendResponse({ selectedText });
+        sendResponse({ status: 'UI triggered' });
+
+        const promptUi = await createUi(ctx, selectedText);
+        promptUi.mount();
       }
     );
-
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      const activeElement = document.activeElement;
-
-      let selectedText = '';
-
-      if (
-        activeElement instanceof HTMLInputElement ||
-        activeElement instanceof HTMLTextAreaElement
-      ) {
-        selectedText = activeElement.value.substring(
-          activeElement.selectionStart || 0,
-          activeElement.selectionEnd || 0
-        );
-      } else {
-        selectedText = window.getSelection()?.toString() || '';
-      }
-
-      console.log('[Content Script] Selected:', selectedText.trim());
-      sendResponse({ selectedText });
-    });
   },
 });

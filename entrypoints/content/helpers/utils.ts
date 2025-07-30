@@ -8,3 +8,7 @@ export const getSessionId = (): string => {
   localStorage.setItem('sessionId', newId);
   return newId;
 };
+
+export const formatCriteria = (text: string) => {
+  return text.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+};

@@ -1,91 +1,117 @@
-import { TabsContent } from '../../components/ui/tabs';
-import { getHistory } from '../../services/historyApi';
-import { PromptResponse } from '../../types/analysis';
+import { useQuery } from '@tanstack/react-query';
+import { Loading, TabsContent } from '../../components/ui';
+import { formatCriteria, getSessionId } from '../../helpers/utils';
+import { fetchHistory } from '../../services/historyApi';
+import { BrushCleaning } from 'lucide-react';
 
 const Histories = () => {
-  const [promptHistory, setPromptHistory] = useState<PromptResponse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const sessionId = getSessionId();
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const result = await getHistory();
-        setPromptHistory(result.history);
-      } catch (error) {
-        console.error('Failed to load history:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const {
+    data: promptHistory,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ['prompt-history', sessionId],
+    queryFn: () => fetchHistory(sessionId),
+  });
 
-    fetchHistory();
-  }, []);
+  if (isLoading) return <Loading />;
+  if (isError) return <div>Error: {(error as Error).message}</div>;
+  if (!promptHistory?.history || promptHistory.history.length === 0)
+    return <BrushCleaning className="mt-2 mx-auto" />;
 
   return (
-    <TabsContent value="history" className="p-6 space-y-6">
+    <TabsContent value="history" className="space-y-4">
       <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
         🕘 Recent Prompts
       </h2>
 
-      {loading ? (
-        <p className="text-sm text-gray-500">Loading...</p>
-      ) : promptHistory.length === 0 ? (
-        <p className="text-sm text-gray-500">No history found.</p>
-      ) : (
-        <div className="grid gap-6">
-          {promptHistory.map((item, i) => (
-            <div
-              key={i}
-              className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
-            >
-              <div className="mb-4">
-                <h3 className="text-base font-semibold text-gray-700">
+      <div className="space-y-4">
+        {promptHistory?.history.map((item, index) => (
+          <div
+            key={`prompt-${index}`}
+            className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 space-y-4"
+          >
+            <div className="flex justify-between">
+              {/* Original Prompt */}
+              <div className="space-y-1">
+                <span className="inline-block bg-purple-100 text-purple-700 text-xs font-medium px-2 py-1 rounded">
                   Prompt
-                </h3>
-                <p className="text-sm text-gray-800 mt-1">
-                  {item.original_prompt}
-                </p>
+                </span>
+                <p className="text-sm text-gray-800">{item.original_prompt}</p>
               </div>
 
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-gray-600">
+              {/* Timestamp */}
+              <p className="text-xs text-gray-400 text-right">
+                🗓 {new Date(item.timestamp).toLocaleString()}
+              </p>
+            </div>
+
+            {/* Suggestions */}
+            {item.optimized_prompts?.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-orange-600 mb-2">
                   ✨ Suggestions
                 </h4>
-                <ul className="mt-1 space-y-1 pl-6 list-disc">
-                  {item.optimized_prompts.map((p, idx) => (
-                    <li key={idx} className="text-sm text-gray-700">
-                      <span className="font-medium">{p.style}:</span>{' '}
-                      {p.content}
+                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+                  {item.optimized_prompts.map((op, i) => (
+                    <li key={`opt-${i}`}>
+                      <span className="font-medium text-gray-800">
+                        {op.style}:
+                      </span>{' '}
+                      {op.content}
                     </li>
                   ))}
                 </ul>
               </div>
+            )}
 
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-gray-600">
+            {/* Summary */}
+            {item.summary && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-pink-600">
                   📌 Summary
                 </h4>
-                <ul className="mt-1 space-y-1 pl-6 list-disc">
-                  {item.summary.map((s, idx) => (
-                    <li key={idx} className="text-sm text-gray-700">
-                      <span className="font-medium">
-                        {s.criteria.charAt(0).toUpperCase() +
-                          s.criteria.slice(1)}
-                        :
-                      </span>{' '}
-                      {s.content}
-                    </li>
-                  ))}
-                </ul>
-              </div>
 
-              <div className="text-xs text-gray-500 flex justify-end">
-                📅 {new Date(item.timestamp).toLocaleString()}
+                {/* Analysis Summary */}
+                <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-sm text-gray-700">
+                  <p className="font-medium text-gray-800 mb-1">
+                    Analysis Summary:
+                  </p>
+                  <p>{item.summary.analysis_summary}</p>
+                </div>
+
+                {/* Component Analysis */}
+                <div className="grid gap-2">
+                  {item.summary.component_analysis
+                    .filter((c) => c.present)
+                    .map((c, idx) => (
+                      <div
+                        key={`component-${idx}`}
+                        className="bg-gray-50 border border-gray-200 rounded-md px-3 py-2"
+                      >
+                        <p className="text-xs font-medium text-gray-800">
+                          {formatCriteria(c.criteria)}
+                        </p>
+                        <p className="text-xs text-gray-700">{c.comment}</p>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Final Recommendation */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md px-3 py-2 text-sm text-gray-700">
+                  <p className="font-medium text-gray-800 mb-1">
+                    Final Recommendation:
+                  </p>
+                  <p>{item.summary.final_recommendation}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
+          </div>
+        ))}
+      </div>
     </TabsContent>
   );
 };

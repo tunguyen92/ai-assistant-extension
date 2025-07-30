@@ -13,11 +13,11 @@ export default defineConfig({
       permissions: [
         'activeTab',
         'contextMenus',
-        // 'declarativeNetRequest',
         'scripting',
         'storage',
         'tabs',
       ],
+      host_permissions: ['*://*/*'],
     };
   },
 });
